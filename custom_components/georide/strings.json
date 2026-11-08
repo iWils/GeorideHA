@@ -1,25 +1,30 @@
 {
   "config": {
-    "title": "GeoRide",
     "step": {
-      "georide_login": {
-        "title": "Set up GeoRide",
-        "description": "Sign-in to GeoRide",
+      "user": {
+        "title": "GeoRide",
+        "description": "Connect your GeoRide account (same credentials as the GeoRide app).",
         "data": {
-          "email": "email",
-          "password": "password"
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide",
+        "description": "The GeoRide session for {email} has expired: enter your password again.",
+        "data": {
+          "password": "Password"
         }
       }
     },
     "error": {
-      "faulty_credentials": "Authorization failed",
-      "unknown": "Unknown error"
+      "faulty_credentials": "Invalid email or password",
+      "cannot_connect": "Unable to reach the GeoRide API",
+      "unknown": "Unexpected error"
     },
     "abort": {
-      "one_instance_allowed": "Only a single instance is allowed."
-    },
-    "create_entry": {
-      "default": "\n\nLogin succes"
+      "already_configured": "This GeoRide account is already configured",
+      "reauth_successful": "Re-authentication successful"
     }
   }
 }

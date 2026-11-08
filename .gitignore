@@ -3,3 +3,6 @@ lib64/
 bin/
 include/
 lib/
+__pycache__/
+*.pyc
+.pytest_cache/

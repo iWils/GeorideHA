@@ -1,15 +1,22 @@
 {
   "domain": "georide",
   "name": "GeoRide",
-  "config_flow": true,
-  "documentation": "https://github.com/ptimatth/GeorideHA",
-  "issue_tracker": "https://github.com/ptimatth/GeorideHA/issues",
-  "iot_class": "cloud_polling",
-  "requirements": [
-    "georideapilib>=1.0.0",
-    "pyjwt>=2.2.0"
+  "codeowners": [
+    "@iWils"
   ],
+  "config_flow": true,
   "dependencies": [],
-  "codeowners": ["ptimatth"],
-  "version": "1.1.1"
+  "documentation": "https://github.com/iWils/GeorideHA",
+  "integration_type": "hub",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/iWils/GeorideHA/issues",
+  "loggers": [
+    "custom_components.georide",
+    "socketio",
+    "engineio"
+  ],
+  "requirements": [
+    "python-socketio[asyncio_client]>=5.11.0"
+  ],
+  "version": "2.0.0"
 }
