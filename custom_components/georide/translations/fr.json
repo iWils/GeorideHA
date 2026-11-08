@@ -1,25 +1,30 @@
 {
   "config": {
-    "title": "GeoRide",
     "step": {
-      "georide_login": {
-        "title": "Configuration de GeoRide",
-        "description": "T'es un motard ! V",
+      "user": {
+        "title": "GeoRide",
+        "description": "Connectez votre compte GeoRide (mêmes identifiants que l'application GeoRide).",
         "data": {
-          "email": "email",
-          "password": "password"
+          "email": "E-mail",
+          "password": "Mot de passe"
+        }
+      },
+      "reauth_confirm": {
+        "title": "GeoRide",
+        "description": "La session GeoRide de {email} a expiré : saisissez de nouveau votre mot de passe.",
+        "data": {
+          "password": "Mot de passe"
         }
       }
     },
     "error": {
-      "faulty_credentials": "Connexion \u00e9chou\u00e9e",
-      "unkonwn": "Erreur inconnue"
+      "faulty_credentials": "E-mail ou mot de passe incorrect",
+      "cannot_connect": "Impossible de joindre l'API GeoRide",
+      "unknown": "Erreur inattendue"
     },
     "abort": {
-      "one_instance_allowed": "Seulement une instance est autoris\u00e9e"
-    },
-    "create_entry": {
-      "default": "\n\nConnexion r\u00e9ussie !"
+      "already_configured": "Ce compte GeoRide est déjà configuré",
+      "reauth_successful": "Reconnexion réussie"
     }
   }
 }

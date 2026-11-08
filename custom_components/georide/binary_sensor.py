@@ -1,349 +1,125 @@
-""" binary_sensor for GeoRide object """
+"""Binary sensors for GeoRide trackers and beacons."""
 
-import logging
+from __future__ import annotations
 
-from typing import Any, Mapping
-
-from homeassistant.core import callback
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass, ENTITY_ID_FORMAT
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
 )
+from homeassistant.const import EntityCategory
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+from . import GeoRideConfigEntry
+from .entity import GeoRideBeaconEntity, GeoRideTrackerEntity
 
 
-from .const import DOMAIN as GEORIDE_DOMAIN
-from .device import Device, DeviceBeacon
-
-_LOGGER = logging.getLogger(__name__)
-async def async_setup_entry(hass, config_entry, async_add_entities): # pylint: disable=W0613
-    """Set up GeoRide tracker based off an entry."""
-    georide_context = hass.data[GEORIDE_DOMAIN]["context"]
-    entities = []
-    coordoned_trackers = georide_context.georide_trackers_coordoned
-    for coordoned_tracker in coordoned_trackers:
-        tracker_device = coordoned_tracker['tracker_device']
-        coordinator = coordoned_tracker['coordinator']
-
-        entities.append(GeoRideStolenBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideCrashedBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideOwnerBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideActiveSubscriptionBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideNetworkBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideMovingBinarySensorEntity(coordinator, tracker_device))
-        entities.append(GeoRideUpdatedBinarySensorEntity(coordinator, tracker_device))
-
-        hass.data[GEORIDE_DOMAIN]["devices"][tracker_device.tracker.tracker_id] = coordinator
-    
-    coordoned_beacons = georide_context.georide_trackers_beacon_coordoned
-    for coordoned_beacon in coordoned_beacons:
-        tracker_beacon = coordoned_beacon['tracker_beacon']
-        coordinator = coordoned_beacon['coordinator']
-        entities.append(GeoRideBeaconUpdatedBinarySensorEntity(coordinator, tracker_beacon))
-        hass.data[GEORIDE_DOMAIN]["devices"][tracker_beacon.beacon.beacon_id] = coordinator
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: GeoRideConfigEntry,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    coordinator = entry.runtime_data.coordinator
+    entities: list[BinarySensorEntity] = []
+    for tracker_id in coordinator.trackers:
+        entities += [
+            cls(coordinator, tracker_id)
+            for cls in (
+                GeoRideStolenBinarySensor,
+                GeoRideCrashedBinarySensor,
+                GeoRideOwnerBinarySensor,
+                GeoRideActiveSubscriptionBinarySensor,
+                GeoRideNetworkBinarySensor,
+                GeoRideMovingBinarySensor,
+                GeoRideUpdateBinarySensor,
+            )
+        ]
+    entities += [GeoRideBeaconUpdateBinarySensor(coordinator, beacon_id) for beacon_id in coordinator.beacons]
+    async_add_entities(entities)
 
 
-    async_add_entities(entities, True)
+class GeoRideStolenBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    """On = the motorbike is declared stolen."""
 
-    return True
-
-
-class GeoRideBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
-    """Represent a tracked device."""
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator)
-        self._tracker_device = tracker_device
-        self._name = tracker_device.tracker.tracker_name
-
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('binary_sensor')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-        self._is_on = False
+    _unique_prefix = "is_stolen"
+    _name_suffix = "is not stolen"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     @property
-    def device_info(self):
-        """Return the device info."""
-        return self._tracker_device.device_info
+    def is_on(self) -> bool:
+        return self.tracker.is_stolen
 
-class GeoRideBeaconBinarySensorEntity(CoordinatorEntity, BinarySensorEntity):
-    """Represent a tracked device."""
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device_beacon: DeviceBeacon):
-        """Set up Georide entity."""
-        super().__init__(coordinator)
-        self._tracker_device_beacon = tracker_device_beacon
-        self._name = tracker_device_beacon.beacon.name
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('binary_sensor')}.{tracker_device_beacon.beacon.beacon_id}"# pylint: disable=C0301
-        self._is_on = False
+
+class GeoRideCrashedBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    """On = a crash has been detected."""
+
+    _unique_prefix = "is_crashed"
+    _name_suffix = "is not crashed"
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
 
     @property
-    def entity_category(self):
-        return None
+    def is_on(self) -> bool:
+        return self.tracker.is_crashed
+
+
+class GeoRideOwnerBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    _unique_prefix = "is_owner"
+    _name_suffix = "is own tracker"
 
     @property
-    def device_info(self):
-        """Return the device info."""
-        return self._tracker_device_beacon.device_info
+    def is_on(self) -> bool:
+        return self.tracker.role == "owner"
 
-class GeoRideStolenBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('is_stolen')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
+
+class GeoRideActiveSubscriptionBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    _unique_prefix = "is_active_subscription"
+    _name_suffix = "has an active subscription"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"is_stolen_{self._tracker_device.tracker.tracker_id}"
+    def is_on(self) -> bool:
+        return self.tracker.has_active_subscription
+
+
+class GeoRideNetworkBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    _unique_prefix = "have_network"
+    _name_suffix = "have network"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def device_class(self):
-        """Return the device class."""
-        return BinarySensorDeviceClass.PROBLEM
+    def is_on(self) -> bool:
+        return self.tracker.status == "online"
+
+
+class GeoRideMovingBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    _unique_prefix = "moving"
+    _name_suffix = "is moving"
+    _attr_device_class = BinarySensorDeviceClass.MOVING
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def is_on(self):
-        """state value property"""
-        return self._tracker_device.tracker.is_stolen
+    def is_on(self) -> bool:
+        return self.tracker.moving
+
+
+class GeoRideUpdateBinarySensor(GeoRideTrackerEntity, BinarySensorEntity):
+    _unique_prefix = "update"
+    _name_suffix = "have an update"
+    _attr_device_class = BinarySensorDeviceClass.UPDATE
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def name(self):
-        """ GeoRide odometer name """
-        return f"{self._name} is not stolen"
+    def is_on(self) -> bool:
+        return not self.tracker.is_up_to_date
 
 
-class GeoRideCrashedBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('is_crashed')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
+class GeoRideBeaconUpdateBinarySensor(GeoRideBeaconEntity, BinarySensorEntity):
+    _unique_prefix = "update"
+    _name_suffix = "have an update"
+    _attr_device_class = BinarySensorDeviceClass.UPDATE
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"is_crashed_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def device_class(self):
-        """Return the device class."""
-        return BinarySensorDeviceClass.PROBLEM
-
-    @property
-    def is_on(self):
-        """state value property"""
-        return self._tracker_device.tracker.is_crashed
-
-    @property
-    def name(self):
-        """ GeoRide odometer name """
-        return f"{self._name} is not crashed"
-
-class GeoRideActiveSubscriptionBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('is_active_subscription_')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-
-    @property
-    def entity_category(self):
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"is_active_subscription_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        tracker = self._tracker_device.tracker
-        if tracker.is_oldsubscription:
-            if tracker.subscription_id is not None:
-                return True
-            return False
-        else:
-            if tracker.subscription is not None and tracker.subscription.subscription_id is not None:
-                return True
-            return False
-
-    @property
-    def name(self):
-        """ GeoRide odometer name """
-        return f"{self._name} has an active subscription"
-
-class GeoRideOwnerBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('is_owner')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"is_owner_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        if self._tracker_device.tracker.role == "owner":
-            return True
-        return False
-
-    @property
-    def name(self):
-        """ GeoRide odometer name """
-        return f"{self._name} is own tracker"
-
-class GeoRideNetworkBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('have_network')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-
-    @property
-    def entity_category(self):
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"have_network_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def device_class(self):
-        """Return the device class."""
-        return "connectivity"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        if self._tracker_device.tracker.status == "online":
-            return True
-        return False
-
-    @property
-    def device_class(self) -> str:
-        """device class"""
-        return BinarySensorDeviceClass.CONNECTIVITY
-
-    @property
-    def name(self):
-        """ GeoRide name """
-        return f"{self._name} have network"
-
-class GeoRideMovingBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('moving')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-
-    @property
-    def entity_category(self):
-        return EntityCategory.DIAGNOSTIC
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"moving_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def device_class(self):
-        """Return the device class."""
-        return "moving"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        return self._tracker_device.tracker.moving
-    
-    @property
-    def device_class(self) -> str:
-        """device class"""
-        return BinarySensorDeviceClass.MOVING
-
-    @property
-    def name(self):
-        """ GeoRide name """
-        return f"{self._name} is moving"
-
-class GeoRideUpdatedBinarySensorEntity(GeoRideBinarySensorEntity):
-    """Represent a tracked device."""
-    @property
-    def entity_category(self):
-        return EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_device: Device):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('update')}.{tracker_device.tracker.tracker_id}"# pylint: disable=C0301
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"update_{self._tracker_device.tracker.tracker_id}"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        return not self._tracker_device.tracker.is_up_to_date
-    
-    @property
-    def device_class(self) -> str:
-        """device class"""
-        return BinarySensorDeviceClass.UPDATE
-
-    @property
-    def name(self):
-        """ GeoRide name """
-        return f"{self._name} have an update"
-
-class GeoRideBeaconUpdatedBinarySensorEntity(GeoRideBeaconBinarySensorEntity):
-    """Represent a tracked device."""
-    @property
-    def entity_category(self):
-        return EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DataUpdateCoordinator[Mapping[str, Any]],
-                 tracker_beacon_device: DeviceBeacon):
-        """Set up Georide entity."""
-        super().__init__(coordinator, tracker_beacon_device)
-        self.entity_id = f"{ENTITY_ID_FORMAT.format('update')}.{tracker_beacon_device.beacon.beacon_id}"# pylint: disable=C0301
-
-    @property
-    def unique_id(self):
-        """Return the unique ID."""
-        return f"update_{self._tracker_device_beacon.beacon.beacon_id}"
-
-    @property
-    def is_on(self):
-        """state value property"""
-        return not self._tracker_device_beacon.beacon.is_updated
-    
-    @property
-    def device_class(self) -> str:
-        """device class"""
-        return BinarySensorDeviceClass.UPDATE
-
-    @property
-    def name(self):
-        """ GeoRide name """
-        return f"{self._name} have an update"
+    def is_on(self) -> bool:
+        return not self.beacon.is_updated

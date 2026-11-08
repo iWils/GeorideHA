@@ -9,52 +9,33 @@
 Official GeoRide website: https://georide.fr/
 
 ## Description
-This component add some sensor for GeoRide Tracker
+This component adds entities for GeoRide trackers and beacons, based on the
+[official GeoRide API](https://api.georide.com/index):
 
-### What's entity is available :
+- REST API `https://api.georide.com` (polled every 10 minutes)
+- Real-time Socket.IO `wss://socket.georide.com` (positions, lock, alarms) — websocket transport,
+  token sent in the `auth` object, infinite automatic reconnection
 
-    Get GeoRide position
-    Get GeoRide lock status
-    Change GeoRide lock status
-    Get stollen status
-    Get crashed status
-    Get is owner status
-    Get subsription status
-    Get odomoter to km an m (2 entities)
-    Internal battery (of georide 3) (not work on GR1)
-    External battery (of the bike) (not work on GR1)
-    Fixtime (last registered positition of the georide)
+Requires **Home Assistant 2026.8 or newer**.
 
+### Entities
 
-### What's events are available:
-you can filter by data.device_id == XX (XX is your tracker id)
-you can display your tracker name by by data.device_name
+    Position (device_tracker)
+    Lock status / change lock status (switch)
+    Eco mode (switch, GeoRide 3)
+    Siren (siren, GeoRide 3)
+    Stolen / crashed / owner / subscription / network / moving / update status (binary_sensor)
+    Odometer in m and km
+    Speed in km/h (the API returns knots, converted by the integration)
+    Internal battery (GeoRide 3) and external battery (motorbike) voltage
+    Fixtime (last registered position, timestamp)
+    Beacon battery level (unknown when the beacon reports 255)
 
-event;
-    
-    georide_position_event
-    georide_lock_event
-    georide_device_event
-    georide_alarm_event 
+### Upgrade from 1.x
+Unique IDs are unchanged: existing entity IDs, history and automations are kept.
+The token is now renewed through `GET /user/new-token` before it expires (30 days);
+if the password changes, Home Assistant asks for re-authentication.
 
-you can filter with data.type == 'alarm_vibration' to filter by vibration
-here is the alarm type available: (listen the georide_alarm_event)
-
-    alarm_vibration
-    alarm_exitZone
-    alarm_crash
-    alarm_crashParking
-    alarm_deviceOffline
-    alarm_deviceOnline
-    alarm_powerCut
-    alarm_powerUncut
-    alarm_batteryWarning
-    alarm_temperatureWarning
-    alarm_magnetOn
-    alarm_magnetOff
-    alarm_sonorAlarmOn
-
- 
 ## Question:
 
 ### How to have the odometer in Km ? (Deprecated, now you have an entity - thx @Inervo)

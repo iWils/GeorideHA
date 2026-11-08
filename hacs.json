@@ -1,8 +1,9 @@
 {
-  "name": "GeoRide integration",
+  "name": "GeoRide",
   "content_in_root": false,
   "render_readme": true,
-  "domains": ["devices_tracker", "sensor"],
-  "country": ["FR"],
-  "homeassistant": "2024.11.0"
+  "country": [
+    "FR"
+  ],
+  "homeassistant": "2026.8.0"
 }

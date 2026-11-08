@@ -1,70 +1,76 @@
-""" Georide config flow """
+"""Config flow for GeoRide."""
 
+from __future__ import annotations
+
+from collections.abc import Mapping
 import logging
-from homeassistant import config_entries
+from typing import Any
+
 import voluptuous as vol
-import georideapilib.api as GeoRideApi
-import georideapilib.exception as GeoRideException
 
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api import GeoRideApiClient, GeoRideAuthError, GeoRideError
 from .const import CONF_EMAIL, CONF_PASSWORD, CONF_TOKEN, DOMAIN
-
 
 _LOGGER = logging.getLogger(__name__)
 
-@config_entries.HANDLERS.register(DOMAIN)
-class GeoRideConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """GeoRide config flow """
-    
-    async def async_step_user(self, user_input=None): #pylint: disable=W0613
-        """ handle info to help to configure GeoRide """
+SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_EMAIL): vol.All(str, vol.Length(min=3)),
+        vol.Required(CONF_PASSWORD): str,
+    }
+)
 
-        if self._async_current_entries():
-            return self.async_abort(reason="one_instance_allowed")
 
-        return self.async_show_form(step_id='georide_login', data_schema=vol.Schema({
-            vol.Required(CONF_EMAIL): vol.All(str, vol.Length(min=3)),
-            vol.Required(CONF_PASSWORD): vol.All(str)
-        }))
+class GeoRideConfigFlow(ConfigFlow, domain=DOMAIN):
+    """GeoRide config flow."""
 
-    async def async_step_import(self, user_input=None): #pylint: disable=W0613
-        """Import a config flow from configuration."""
-        if self._async_current_entries():
-            return self.async_abort(reason="one_instance_allowed")
+    VERSION = 1
 
-        return self.async_show_form(step_id='georide_login', data_schema=vol.Schema({
-            vol.Required(CONF_EMAIL): vol.All(str, vol.Length(min=3)),
-            vol.Required(CONF_PASSWORD): vol.All(str)
-        }))
-
-    async def async_step_georide_login(self, user_input):
-        """ try to seupt GeoRide Account """
-
-        schema = vol.Schema({
-            vol.Required(CONF_EMAIL): vol.All(str, vol.Length(min=3)),
-            vol.Required(CONF_PASSWORD): vol.All(str)
-        })
-        
-        if user_input is None:
-            return self.async_show_form(step_id='georide_login', data_schema=schema)
-        
-        email = user_input[CONF_EMAIL]
-        password = user_input[CONF_PASSWORD]
-        
+    async def _async_login(self, email: str, password: str) -> tuple[str | None, dict[str, str]]:
+        api = GeoRideApiClient(async_get_clientsession(self.hass), email, password)
         try:
-            account = await self.hass.async_add_executor_job(GeoRideApi.get_authorisation_token, email, password)
-            data = {
-                CONF_EMAIL: email,
-                CONF_PASSWORD: password,
-                CONF_TOKEN: account.auth_token
-            }
-            return self.async_create_entry(title=email, data=data)
-        except (GeoRideException.SeverException, GeoRideException.LoginException):
-            _LOGGER.error("Invalid credentials provided, config not created")
-            errors = {"base":  "faulty_credentials"}
-            return self.async_show_form(step_id="georide_login", data_schema=schema, errors=errors)
-        except: 
-            _LOGGER.error("Unknown error")
-            errors = {"base": "unkonwn"}
-            return self.async_show_form(step_id="georide_login", data_schema=schema, errors=errors)
-        
+            return await api.async_login(), {}
+        except GeoRideAuthError:
+            return None, {"base": "faulty_credentials"}
+        except GeoRideError:
+            return None, {"base": "cannot_connect"}
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Unexpected error during GeoRide login")
+            return None, {"base": "unknown"}
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+            self._abort_if_unique_id_configured()
+            token, errors = await self._async_login(user_input[CONF_EMAIL], user_input[CONF_PASSWORD])
+            if token:
+                return self.async_create_entry(
+                    title=user_input[CONF_EMAIL], data={**user_input, CONF_TOKEN: token}
+                )
+        return self.async_show_form(step_id="user", data_schema=SCHEMA, errors=errors)
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+        if user_input is not None:
+            token, errors = await self._async_login(entry.data[CONF_EMAIL], user_input[CONF_PASSWORD])
+            if token:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD], CONF_TOKEN: token},
+                )
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"email": entry.data[CONF_EMAIL]},
+            errors=errors,
+        )
