@@ -64,6 +64,15 @@ pytest
 The tests mock the REST API with `aioclient_mock` and disable the socket. They check that historical entity
 IDs are kept, unit conversions, socket event handling, token renewal and the config flow.
 
+## Continuous integration
+- `.github/workflows/validate.yml`: hassfest, HACS validation and pytest on every push to `master`, every
+  pull request and every Monday (to catch a Home Assistant change early).
+- `.github/workflows/release.yml`: when a release is published, checks that the `manifest.json` version
+  matches the tag, builds `georide.zip` (content of `custom_components/georide`) and attaches it to the
+  release. HACS installs from this zip (`zip_release` in `hacs.json`). It can be re-run by hand
+  (*Run workflow*, with the tag).
+
 ## Release
 1. Update `version` in `custom_components/georide/manifest.json` and `CHANGELOG.md`.
-2. Merge into `master`, then create a GitHub release `vX.Y.Z`: HACS proposes the update to users.
+2. Merge into `master`, then publish a GitHub release with tag `vX.Y.Z` (the CHANGELOG section as notes).
+3. The *Release* workflow attaches `georide.zip`; HACS proposes the update to users.

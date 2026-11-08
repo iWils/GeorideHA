@@ -24,7 +24,11 @@ def tracker_model_name(tracker: GeoRideTracker) -> str:
     if tracker.version == 2:
         return "GeoRide 2"
     if tracker.version == 3:
-        return "GeoRide 3" if tracker.model == "georide-3" else "GeoRide Mini"
+        if tracker.model == "georide-3":
+            return "GeoRide 3"
+        if tracker.model == "georide-3s":
+            return "GeoRide 3S"
+        return "GeoRide Mini"
     return "Prototype / Unknown"
 
 

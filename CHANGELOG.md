@@ -26,6 +26,9 @@ First release of the maintained fork. Requires **Home Assistant 2026.8+**.
 - Config entry unique ID (the GeoRide email) and a `cannot_connect` error in the config flow.
 - `georide_refresh_tracker_event` documented.
 - Test suite based on `pytest-homeassistant-custom-component`.
+- GeoRide 3S model name (from upstream 1.1.2RC, thanks to djodjo02130).
+- GitHub Actions: `Validate` (hassfest, HACS, pytest — on push, PR and weekly) and `Release` (builds
+  `georide.zip` and attaches it to each release; HACS installs from it).
 
 ### Fixed
 - Speed was displayed in **knots** with a km/h unit: it is now converted (× 1.852).

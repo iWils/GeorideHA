@@ -1,0 +1,42 @@
+name: Release
+
+# Builds georide.zip (the integration only) and attaches it to the GitHub release.
+# HACS installs from this zip (hacs.json: zip_release / filename).
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to (re)attach the zip to (e.g. v2.0.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Check that manifest.json version matches the tag
+        run: |
+          version=$(jq -r .version custom_components/georide/manifest.json)
+          if [ "v${version}" != "${TAG}" ] && [ "${version}" != "${TAG}" ]; then
+            echo "::error::manifest.json version (${version}) does not match tag ${TAG}"
+            exit 1
+          fi
+
+      - name: Build georide.zip and attach it to the release
+        working-directory: custom_components/georide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip -r "$RUNNER_TEMP/georide.zip" . -x '*__pycache__*' '*.pyc'
+          unzip -l "$RUNNER_TEMP/georide.zip" | grep -q ' manifest.json$'
+          gh release upload "$TAG" "$RUNNER_TEMP/georide.zip" --clobber
